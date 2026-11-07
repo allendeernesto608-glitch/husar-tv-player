@@ -1,1 +1,1376 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#080d16">
+<title>HÚSAR IPTV</title>
+
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#080d16;
+  --panel:#111c2c;
+  --accent:#16c7b5;
+  --text:#f4f7fb;
+  --muted:#a7b4c5;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  min-height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Arial,Helvetica,sans-serif;
+}
+header{
+  height:58px;
+  padding:0 18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:#0d1726;
+  border-bottom:1px solid #26374d;
+}
+.brand{
+  font-size:21px;
+  font-weight:800;
+  letter-spacing:2px;
+}
+.brand span{color:var(--accent)}
+.status{
+  font-size:12px;
+  color:var(--muted);
+  text-align:right;
+}
+main{
+  max-width:1280px;
+  margin:auto;
+  padding:14px;
+}
+.player-wrap{
+  position:relative;
+  background:#000;
+  border:1px solid #26374d;
+  border-radius:10px;
+  overflow:hidden;
+  isolation:isolate;
+}
+video{
+  display:block;
+  width:100%;
+  height:min(56.25vw,680px);
+  min-height:230px;
+  max-height:680px;
+  background:#000;
+  object-fit:contain;
+  outline:none;
+}
+.player-controls{
+  position:absolute;
+  top:12px;
+  right:12px;
+  z-index:8;
+}
+.icon-btn{
+  width:46px;
+  height:46px;
+  border:1px solid #718096;
+  border-radius:9px;
+  background:#142238;
+  color:white;
+  font-size:22px;
+  cursor:pointer;
+}
+.channel-overlay{
+  position:absolute;
+  z-index:7;
+  inset:0 auto 0 0;
+  width:min(410px,88%);
+  padding:12px;
+  background:rgba(7,14,25,.98);
+  border-right:1px solid #38506b;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  visibility:hidden;
+  opacity:0;
+  pointer-events:none;
+  transform:translateX(-8px);
+  transition:opacity .14s ease,transform .14s ease,visibility .14s;
+}
+.channel-overlay.open{
+  visibility:visible;
+  opacity:1;
+  pointer-events:auto;
+  transform:translateX(0);
+}
+.overlay-title{
+  padding:6px 8px 12px;
+  color:var(--accent);
+  font-size:14px;
+  font-weight:bold;
+  letter-spacing:1px;
+}
+.channel{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  min-height:48px;
+  padding:9px 12px;
+  margin:0 0 5px;
+  border:1px solid transparent;
+  border-radius:7px;
+  background:#17263a;
+  color:white;
+  text-align:left;
+  font-size:15px;
+  cursor:pointer;
+}
+.channel.active{
+  background:#15534f;
+  border-color:var(--accent);
+}
+.channel:focus,
+.icon-btn:focus,
+button:focus,
+input:focus,
+textarea:focus{
+  outline:3px solid var(--accent);
+  outline-offset:2px;
+}
+.channel-number{
+  color:var(--accent);
+  min-width:28px;
+  font-weight:bold;
+}
+.channel-name{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.empty{
+  color:var(--muted);
+  padding:18px;
+  text-align:center;
+}
+.menu-help{
+  position:absolute;
+  bottom:12px;
+  right:12px;
+  z-index:3;
+  background:#101c2bcc;
+  color:#dce6f2;
+  padding:8px 12px;
+  border-radius:7px;
+  font-size:12px;
+  pointer-events:none;
+}
+section.panel{
+  margin-top:14px;
+  background:var(--panel);
+  border:1px solid #26374d;
+  border-radius:10px;
+  padding:16px;
+}
+h2{
+  font-size:17px;
+  margin:0 0 12px;
+}
+input,textarea{
+  width:100%;
+  padding:12px;
+  margin:5px 0 10px;
+  border:1px solid #40536b;
+  border-radius:7px;
+  background:#091321;
+  color:white;
+  font-size:15px;
+}
+textarea{
+  min-height:105px;
+  resize:vertical;
+}
+button.action{
+  padding:11px 15px;
+  margin:4px 4px 4px 0;
+  border:0;
+  border-radius:7px;
+  background:var(--accent);
+  color:#041512;
+  font-weight:bold;
+  font-size:14px;
+  cursor:pointer;
+}
+button.secondary{
+  background:#30435d;
+  color:white;
+}
+.row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.small{
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.5;
+}
+.message{
+  font-size:13px;
+  color:var(--accent);
+  min-height:18px;
+}
+.hidden{display:none!important}
+footer{
+  text-align:center;
+  padding:20px;
+  color:#718096;
+  font-size:12px;
+}
+@media(max-width:650px){
+  main{padding:8px}
+  header{padding:0 12px}
+  .brand{font-size:18px}
+  video{
+    height:56.25vw;
+    min-height:210px;
+  }
+  section.panel{padding:12px}
+}
+@media(prefers-reduced-motion:reduce){
+  .channel-overlay{transition:none}
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="brand">HÚSAR <span>IPTV</span></div>
+  <div class="status" id="status" aria-live="polite">
+    Listo para cargar una lista
+  </div>
+</header>
+
+<main>
+
+  <div class="player-wrap" id="playerWrap">
+
+    <video
+      id="video"
+      controls
+      playsinline
+      preload="metadata"
+      tabindex="0"
+      aria-label="Reproductor de televisión">
+    </video>
+
+    <div class="player-controls">
+      <button
+        class="icon-btn"
+        id="menuButton"
+        type="button"
+        aria-label="Mostrar canales"
+        title="Mostrar canales">
+        ☰
+      </button>
+    </div>
+
+    <div
+      class="channel-overlay"
+      id="channelOverlay"
+      aria-hidden="true">
+
+      <div class="overlay-title">CANALES</div>
+
+      <div id="channelList">
+        <div class="empty">Carga una lista para comenzar</div>
+      </div>
+
+    </div>
+
+    <div class="menu-help" id="menuHelp">
+      OK: mostrar canales
+    </div>
+
+  </div>
+
+  <section class="panel">
+
+    <h2>Cargar lista</h2>
+
+    <div class="row">
+      <button class="action" id="fileButton" type="button">
+        Seleccionar archivo M3U
+      </button>
+
+      <input
+        id="fileInput"
+        type="file"
+        accept=".m3u,.m3u8,text/plain"
+        class="hidden">
+    </div>
+
+    <input
+      id="urlInput"
+      type="url"
+      placeholder="Pegar dirección URL de lista M3U"
+      autocomplete="url">
+
+    <button class="action" id="urlButton" type="button">
+      Cargar desde URL
+    </button>
+
+    <textarea
+      id="textInput"
+      placeholder="O pegar aquí el contenido de una lista M3U">
+    </textarea>
+
+    <button class="action" id="textButton" type="button">
+      Cargar texto M3U
+    </button>
+
+    <div
+      class="message"
+      id="loadMessage"
+      role="status"
+      aria-live="polite">
+    </div>
+
+    <p class="small">
+      Si el servidor de la URL bloquea el acceso del navegador por CORS,
+      descarga el archivo y cárgalo desde tu dispositivo.
+    </p>
+
+  </section>
+
+  <section class="panel">
+
+    <h2>Vinculación remota</h2>
+
+    <p class="small">
+      Genera un código en el televisor y usa ese mismo código en el
+      teléfono para enviar la lista, o recibe una lista que ya fue enviada.
+    </p>
+
+    <div class="row">
+      <button class="action" id="createCode" type="button">
+        Generar código en este equipo
+      </button>
+    </div>
+
+    <input
+      id="pairCode"
+      maxlength="24"
+      placeholder="Código de vinculación"
+      autocomplete="off">
+
+    <button class="action" id="sendRemote" type="button">
+      Enviar lista con código
+    </button>
+
+    <button class="action secondary" id="receiveRemote" type="button">
+      Recibir lista con código
+    </button>
+
+    <div
+      class="message"
+      id="pairMessage"
+      role="status"
+      aria-live="polite">
+    </div>
+
+  </section>
+
+</main>
+
+<footer>
+  HÚSAR IPTV · Reproductor web sin publicidad
+</footer>
+
+<script>
+(function(){
+
+"use strict";
+
+var SUPABASE_URL =
+"https://wfodkvfmgfkmltttlqjo.supabase.co";
+
+var SUPABASE_KEY =
+"sb_publishable_9nc0AQ0oyH9ajZtfL0P6fg_cLTdd2gZ";
+
+var video = document.getElementById("video");
+var overlay = document.getElementById("channelOverlay");
+var channelList = document.getElementById("channelList");
+var menuButton = document.getElementById("menuButton");
+var menuHelp = document.getElementById("menuHelp");
+var status = document.getElementById("status");
+var loadMessage = document.getElementById("loadMessage");
+var pairMessage = document.getElementById("pairMessage");
+
+var channels = [];
+var currentIndex = -1;
+var menuOpen = false;
+var hls = null;
+var playlistText = "";
+var remoteTimer = null;
+var remoteBusy = false;
+
+function setStatus(value){
+  status.textContent = value;
+}
+
+function message(value){
+  loadMessage.textContent = value;
+}
+
+function pairStatus(value){
+  pairMessage.textContent = value;
+}
+
+function isEditable(target){
+  return !!(
+    target &&
+    (
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.isContentEditable
+    )
+  );
+}
+
+/* MENÚ DE CANALES */
+
+function toggleMenu(force){
+
+  var next =
+    typeof force === "boolean" ? force : !menuOpen;
+
+  if(next && channels.length === 0){
+    setStatus("Carga una lista para ver los canales");
+    return;
+  }
+
+  menuOpen = next;
+
+  overlay.classList.toggle("open", menuOpen);
+
+  overlay.setAttribute(
+    "aria-hidden",
+    menuOpen ? "false" : "true"
+  );
+
+  menuButton.setAttribute(
+    "aria-expanded",
+    menuOpen ? "true" : "false"
+  );
+
+  menuHelp.textContent = menuOpen
+    ? "OK: reproducir · Atrás: cerrar"
+    : "OK: mostrar canales";
+
+  if(menuOpen){
+
+    var selected =
+      channelList.querySelector(".channel.active") ||
+      channelList.querySelector(".channel");
+
+    if(selected){
+      selected.focus();
+    }
+
+  }else{
+
+    menuButton.focus({preventScroll:true});
+
+  }
+}
+
+menuButton.addEventListener("click",function(){
+  toggleMenu();
+});
+
+
+/* LECTOR DE LISTAS M3U */
+
+function parseM3U(source){
+
+  var lines = String(source || "")
+    .replace(/^\uFEFF/,"")
+    .split(/\r?\n/);
+
+  var result = [];
+  var info = null;
+
+  for(var i=0;i<lines.length;i++){
+
+    var line = lines[i].trim();
+
+    if(!line) continue;
+
+    if(line.indexOf("#EXTINF") === 0){
+
+      var comma = line.lastIndexOf(",");
+
+      var name = comma >= 0
+        ? line.slice(comma+1).trim()
+        : "Canal " + (result.length+1);
+
+      var logo = line.match(/tvg-logo=["']([^"']*)["']/i);
+      var group = line.match(/group-title=["']([^"']*)["']/i);
+
+      info = {
+        name: name || "Canal " + (result.length+1),
+        logo: logo ? logo[1] : "",
+        group: group ? group[1] : ""
+      };
+
+    }else if(line.charAt(0) !== "#"){
+
+      result.push({
+        name: info ? info.name : "Canal " + (result.length+1),
+        logo: info ? info.logo : "",
+        group: info ? info.group : "",
+        url: line
+      });
+
+      info = null;
+
+    }
+
+  }
+
+  return result;
+}
+
+
+function acceptPlaylist(text){
+
+  var parsed = parseM3U(text);
+
+  if(!parsed.length){
+
+    message(
+      "La lista no contiene canales válidos. Comprueba el archivo M3U."
+    );
+
+    return false;
+  }
+
+  playlistText = String(text);
+  channels = parsed;
+  currentIndex = -1;
+
+  renderChannels();
+
+  message(
+    "Lista cargada correctamente: " + channels.length + " canales."
+  );
+
+  setStatus(channels.length + " canales disponibles");
+
+  toggleMenu(true);
+
+  return true;
+}
+
+
+/* CONSTRUCCIÓN DEL LISTADO */
+
+function renderChannels(){
+
+  channelList.innerHTML = "";
+
+  if(!channels.length){
+
+    channelList.innerHTML =
+      '<div class="empty">No hay canales disponibles</div>';
+
+    return;
+  }
+
+  var fragment = document.createDocumentFragment();
+
+  channels.forEach(function(item,index){
+
+    var button = document.createElement("button");
+
+    button.type = "button";
+
+    button.className =
+      "channel" + (index === currentIndex ? " active" : "");
+
+    button.setAttribute("data-index",String(index));
+
+    var number = document.createElement("span");
+
+    number.className = "channel-number";
+    number.textContent = String(index+1);
+
+    var name = document.createElement("span");
+
+    name.className = "channel-name";
+    name.textContent = item.name;
+
+    button.appendChild(number);
+    button.appendChild(name);
+
+    button.addEventListener("click",function(){
+      playChannel(index);
+    });
+
+    fragment.appendChild(button);
+
+  });
+
+  channelList.appendChild(fragment);
+}
+
+
+/* REPRODUCCIÓN */
+
+function destroyHls(){
+
+  if(hls){
+
+    try{
+      hls.destroy();
+    }catch(error){}
+
+    hls = null;
+  }
+
+}
+
+
+function playChannel(index){
+
+  if(index < 0 || index >= channels.length){
+    return;
+  }
+
+  currentIndex = index;
+
+  var item = channels[index];
+  var url = item.url;
+
+  destroyHls();
+
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+
+  var isHls = /\.m3u8(?:$|[?#])/i.test(url);
+
+  if(
+    isHls &&
+    window.Hls &&
+    window.Hls.isSupported()
+  ){
+
+    hls = new window.Hls({
+      enableWorker:true
+    });
+
+    hls.on(
+      window.Hls.Events.ERROR,
+      function(event,data){
+
+        if(data && data.fatal){
+
+          setStatus("Error al reproducir: " + item.name);
+
+          destroyHls();
+        }
+
+      }
+    );
+
+    hls.loadSource(url);
+    hls.attachMedia(video);
+
+    hls.on(
+      window.Hls.Events.MANIFEST_PARSED,
+      function(){
+
+        var promise = video.play();
+
+        if(promise && promise.catch){
+
+          promise.catch(function(){
+
+            setStatus(
+              "Pulsa OK para iniciar: " + item.name
+            );
+
+          });
+
+        }
+
+      }
+    );
+
+  }else{
+
+    video.src = url;
+    video.load();
+
+    var promise = video.play();
+
+    if(promise && promise.catch){
+
+      promise.catch(function(){
+
+        setStatus(
+          "Pulsa reproducir si el canal no inicia automáticamente"
+        );
+
+      });
+
+    }
+
+  }
+
+  renderChannels();
+
+  toggleMenu(false);
+
+  setStatus("Canal seleccionado: " + item.name);
+}
+
+
+/* CARGA DE HLS */
+
+function loadHlsLibrary(callback){
+
+  if(window.Hls){
+    callback();
+    return;
+  }
+
+  var script = document.createElement("script");
+
+  script.src = "https://cdn.jsdelivr.net/npm/hls.js@1";
+  script.async = true;
+
+  script.onload = callback;
+  script.onerror = callback;
+
+  document.head.appendChild(script);
+}
+
+
+/* CARGA DE ARCHIVO LOCAL */
+
+document
+.getElementById("fileButton")
+.addEventListener("click",function(){
+
+  document.getElementById("fileInput").click();
+
+});
+
+
+document
+.getElementById("fileInput")
+.addEventListener("change",function(event){
+
+  var file =
+    event.target.files && event.target.files[0];
+
+  if(!file) return;
+
+  var reader = new FileReader();
+
+  reader.onload = function(){
+
+    acceptPlaylist(
+      String(reader.result || "")
+    );
+
+  };
+
+  reader.onerror = function(){
+
+    message("No se pudo leer el archivo seleccionado.");
+
+  };
+
+  reader.readAsText(file);
+
+});
+
+
+/* CARGA DE TEXTO M3U */
+
+document
+.getElementById("textButton")
+.addEventListener("click",function(){
+
+  acceptPlaylist(
+    document.getElementById("textInput").value
+  );
+
+});
+
+
+/* CARGA POR DIRECCIÓN URL */
+
+document
+.getElementById("urlButton")
+.addEventListener("click",function(){
+
+  var url =
+    document.getElementById("urlInput").value.trim();
+
+  if(!url){
+
+    message("Introduce la dirección de la lista.");
+
+    return;
+  }
+
+  try{
+
+    var parsed = new URL(url);
+
+    if(
+      parsed.protocol !== "http:" &&
+      parsed.protocol !== "https:"
+    ){
+      throw new Error();
+    }
+
+  }catch(error){
+
+    message(
+      "La dirección debe comenzar con http:// o https://"
+    );
+
+    return;
+  }
+
+  message("Conectando con la lista...");
+
+  fetch(url,{method:"GET"})
+
+    .then(function(response){
+
+      if(!response.ok){
+        throw new Error("HTTP " + response.status);
+      }
+
+      return response.text();
+
+    })
+
+    .then(function(text){
+
+      acceptPlaylist(text);
+
+    })
+
+    .catch(function(){
+
+      message(
+        "No se pudo acceder a la lista. Puede ser un bloqueo CORS; descarga el archivo y cárgalo desde el dispositivo."
+      );
+
+    });
+
+});
+
+
+/* CONTROL REMOTO HISENSE VIDAA */
+
+document.addEventListener(
+  "keydown",
+  function(event){
+
+    var key = event.key || "";
+    var code = event.keyCode || event.which || 0;
+    var target = event.target;
+
+    var isBack =
+      key === "Escape" ||
+      key === "Backspace" ||
+      key === "BrowserBack" ||
+      code === 8 ||
+      code === 27 ||
+      code === 461;
+
+    if(isBack){
+
+      if(menuOpen){
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        toggleMenu(false);
+
+      }
+
+      return;
+    }
+
+    if(isEditable(target)){
+      return;
+    }
+
+    var isOK =
+      key === "Enter" ||
+      key === " " ||
+      key === "Select" ||
+      key === "Accept" ||
+      code === 13 ||
+      code === 23 ||
+      code === 66;
+
+    if(isOK){
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if(menuOpen){
+
+        if(
+          target &&
+          target.classList &&
+          target.classList.contains("channel")
+        ){
+
+          var chosen =
+            Number(target.getAttribute("data-index"));
+
+          playChannel(chosen);
+
+        }else{
+
+          var focused =
+            channelList.querySelector(".channel:focus");
+
+          if(focused){
+
+            playChannel(
+              Number(focused.getAttribute("data-index"))
+            );
+
+          }else{
+
+            toggleMenu(false);
+
+          }
+
+        }
+
+      }else{
+
+        toggleMenu(true);
+
+      }
+
+    }
+
+  },
+  true
+);
+
+
+/* NAVEGACIÓN CON FLECHAS */
+
+channelList.addEventListener(
+  "keydown",
+  function(event){
+
+    var buttons =
+      channelList.querySelectorAll(".channel");
+
+    if(!buttons.length) return;
+
+    var index =
+      Array.prototype.indexOf.call(
+        buttons,
+        document.activeElement
+      );
+
+    if(index < 0) return;
+
+    if(
+      event.key === "ArrowDown" ||
+      event.keyCode === 40
+    ){
+
+      event.preventDefault();
+
+      buttons[
+        Math.min(index+1,buttons.length-1)
+      ].focus();
+
+    }else if(
+      event.key === "ArrowUp" ||
+      event.keyCode === 38
+    ){
+
+      event.preventDefault();
+
+      buttons[
+        Math.max(index-1,0)
+      ].focus();
+
+    }else if(
+      event.key === "ArrowRight" ||
+      event.keyCode === 39
+    ){
+
+      event.preventDefault();
+
+      toggleMenu(false);
+
+    }
+
+  }
+);
+
+
+/* CONEXIÓN SUPABASE */
+
+function supabaseRPC(name,body){
+
+  return fetch(
+    SUPABASE_URL + "/rest/v1/rpc/" + name,
+    {
+      method:"POST",
+
+      headers:{
+        "Content-Type":"application/json",
+        "apikey":SUPABASE_KEY,
+        "Authorization":"Bearer " + SUPABASE_KEY
+      },
+
+      body:JSON.stringify(body || {})
+    }
+
+  ).then(function(response){
+
+    return response.text().then(function(raw){
+
+      var data;
+
+      try{
+        data = JSON.parse(raw);
+      }catch(error){
+        data = raw;
+      }
+
+      if(!response.ok){
+
+        var detail =
+          typeof data === "string"
+            ? data
+            : JSON.stringify(data);
+
+        throw new Error(
+          detail || "Error del servidor"
+        );
+
+      }
+
+      return data;
+
+    });
+
+  });
+
+}
+
+
+function firstRow(data){
+
+  return Array.isArray(data) && data.length
+    ? data[0]
+    : data;
+
+}
+
+
+function extractCode(data){
+
+  data = firstRow(data);
+
+  if(typeof data === "string"){
+    return data;
+  }
+
+  if(data && typeof data === "object"){
+
+    return (
+      data.code ||
+      data.pairing_code ||
+      data.codigo ||
+      data.pin ||
+      ""
+    );
+
+  }
+
+  return "";
+}
+
+
+function extractPlaylist(data){
+
+  data = firstRow(data);
+
+  if(typeof data === "string"){
+    return data;
+  }
+
+  if(data && typeof data === "object"){
+
+    return (
+      data.playlist_text ||
+      data.playlist ||
+      data.content ||
+      data.m3u ||
+      ""
+    );
+
+  }
+
+  return "";
+}
+
+
+/* GENERAR CÓDIGO */
+
+document
+.getElementById("createCode")
+.addEventListener("click",function(){
+
+  pairStatus("Solicitando código...");
+
+  supabaseRPC(
+    "husar_create_pairing",
+    {}
+  )
+
+  .then(function(data){
+
+    var code = extractCode(data);
+
+    if(!code){
+
+      throw new Error(
+        "El servidor no devolvió un código reconocible."
+      );
+
+    }
+
+    document.getElementById("pairCode").value =
+      String(code).toUpperCase();
+
+    pairStatus(
+      "Código generado: " + String(code).toUpperCase()
+    );
+
+  })
+
+  .catch(function(error){
+
+    pairStatus(
+      "No se pudo generar el código: " + error.message
+    );
+
+  });
+
+});
+
+
+/* ENVIAR LISTA AL TELEVISOR */
+
+document
+.getElementById("sendRemote")
+.addEventListener("click",function(){
+
+  var code =
+    document.getElementById("pairCode")
+      .value.trim().toUpperCase();
+
+  if(!code){
+
+    pairStatus("Introduce el código del televisor.");
+
+    return;
+  }
+
+  if(!playlistText){
+
+    pairStatus(
+      "Primero carga una lista M3U desde archivo, URL o texto."
+    );
+
+    return;
+  }
+
+  pairStatus("Enviando la lista al televisor...");
+
+  supabaseRPC(
+    "husar_publish_playlist",
+    {
+      p_code:code,
+      p_playlist_text:playlistText
+    }
+  )
+
+  .then(function(){
+
+    pairStatus(
+      "Lista enviada. En el televisor, pulsa Recibir lista con código."
+    );
+
+  })
+
+  .catch(function(error){
+
+    pairStatus(
+      "No se pudo enviar: " + error.message
+    );
+
+  });
+
+});
+
+
+/* RECIBIR LISTA REMOTA */
+
+function receiveRemote(){
+
+  var code =
+    document.getElementById("pairCode")
+      .value.trim().toUpperCase();
+
+  if(!code){
+
+    pairStatus("Introduce el código de vinculación.");
+
+    return;
+  }
+
+  if(remoteBusy) return;
+
+  remoteBusy = true;
+
+  supabaseRPC(
+    "husar_get_playlist",
+    {
+      p_code:code
+    }
+  )
+
+  .then(function(data){
+
+    var text = extractPlaylist(data);
+
+    if(
+      text &&
+      text.indexOf("#EXTM3U") !== -1
+    ){
+
+      if(acceptPlaylist(text)){
+
+        pairStatus("Lista recibida correctamente.");
+
+        if(remoteTimer){
+
+          clearInterval(remoteTimer);
+          remoteTimer = null;
+
+        }
+
+      }
+
+    }else{
+
+      pairStatus(
+        "Aún no hay una lista para este código. Se seguirá consultando."
+      );
+
+    }
+
+  })
+
+  .catch(function(error){
+
+    pairStatus(
+      "No se pudo consultar la lista: " + error.message
+    );
+
+  })
+
+  .then(function(){
+
+    remoteBusy = false;
+
+  });
+
+}
+
+
+document
+.getElementById("receiveRemote")
+.addEventListener("click",function(){
+
+  if(remoteTimer){
+
+    clearInterval(remoteTimer);
+    remoteTimer = null;
+
+  }
+
+  receiveRemote();
+
+  remoteTimer = setInterval(function(){
+
+    if(!channels.length){
+
+      receiveRemote();
+
+    }else{
+
+      clearInterval(remoteTimer);
+      remoteTimer = null;
+
+    }
+
+  },8000);
+
+});
+
+
+/* ESTADO DEL REPRODUCTOR */
+
+video.addEventListener("error",function(){
+
+  if(video.error){
+
+    setStatus(
+      "El canal no pudo reproducirse. Puede ser un formato o enlace no compatible."
+    );
+
+  }
+
+});
+
+
+loadHlsLibrary(function(){});
+
+setStatus("Listo para cargar una lista");
+
+})();
+</script>
+
+</body>
+</html>
+
