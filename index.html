@@ -1,1 +1,534 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#080d16">
+<title>HÚSAR IPTV</title>
+
+<style>
+:root{
+  --bg:#080d16;
+  --panel:#111c2c;
+  --panel2:#19283d;
+  --accent:#16c7b5;
+  --text:#f4f7fb;
+  --muted:#a7b4c5;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:Arial,Helvetica,sans-serif;
+}
+header{
+  height:62px;padding:0 20px;display:flex;
+  align-items:center;justify-content:space-between;
+  background:#0d1726;border-bottom:1px solid #26374d;
+}
+.brand{font-size:22px;font-weight:bold;letter-spacing:2px}
+.brand span{color:var(--accent)}
+.status{font-size:12px;color:var(--muted)}
+main{max-width:1250px;margin:auto;padding:14px}
+.player-wrap{
+  position:relative;background:#000;border-radius:12px;
+  overflow:hidden;border:1px solid #26374d;
+}
+video{
+  display:block;width:100%;height:min(56.25vw,620px);
+  min-height:220px;max-height:620px;background:#000;
+  object-fit:contain;
+}
+.player-controls{
+  position:absolute;top:12px;right:12px;z-index:5;
+  display:flex;gap:8px;
+}
+.icon-btn{
+  width:44px;height:44px;border:1px solid #52647a;
+  border-radius:9px;background:#142238;color:white;
+  font-size:23px;cursor:pointer;
+}
+.icon-btn:focus,.channel:focus,button:focus,input:focus{
+  outline:3px solid var(--accent);outline-offset:2px;
+}
+.channel-overlay{
+  display:none;position:absolute;z-index:4;
+  top:0;left:0;bottom:0;width:min(390px,88%);
+  background:rgba(8,15,27,.97);
+  border-right:1px solid #38506b;
+  overflow-y:auto;padding:12px;
+}
+.channel-overlay.open{display:block}
+.channel{
+  display:flex;align-items:center;gap:12px;
+  width:100%;min-height:49px;padding:9px 12px;
+  margin-bottom:5px;border:1px solid transparent;
+  border-radius:7px;background:#17263a;color:white;
+  text-align:left;font-size:15px;cursor:pointer;
+}
+.channel.active{background:#15534f;border-color:var(--accent)}
+.channel-number{color:var(--accent);min-width:28px;font-weight:bold}
+.channel-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{color:var(--muted);padding:18px;text-align:center}
+.menu-help{
+  position:absolute;bottom:12px;right:12px;z-index:2;
+  background:#101c2bcc;color:#dce6f2;padding:8px 12px;
+  border-radius:7px;font-size:12px;pointer-events:none;
+}
+section.panel{
+  margin-top:14px;background:var(--panel);
+  border:1px solid #26374d;border-radius:12px;padding:16px;
+}
+h2{font-size:17px;margin:0 0 12px}
+input,textarea{
+  width:100%;padding:12px;margin:5px 0 10px;
+  border:1px solid #40536b;border-radius:7px;
+  background:#091321;color:white;font-size:15px;
+}
+textarea{min-height:105px;resize:vertical}
+button.action{
+  padding:11px 15px;margin:4px 4px 4px 0;
+  border:0;border-radius:7px;background:var(--accent);
+  color:#041512;font-weight:bold;font-size:14px;cursor:pointer;
+}
+button.secondary{background:#30435d;color:white}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.small{font-size:12px;color:var(--muted);line-height:1.5}
+.message{font-size:13px;color:var(--accent);min-height:18px}
+.hidden{display:none!important}
+footer{text-align:center;padding:20px;color:#718096;font-size:12px}
+@media(max-width:650px){
+  main{padding:8px}
+  header{padding:0 12px}
+  .brand{font-size:18px}
+  video{height:56.25vw;min-height:210px}
+  section.panel{padding:12px}
+}
+</style>
+</head>
+
+<body>
+<header>
+  <div class="brand">HÚSAR <span>IPTV</span></div>
+  <div class="status" id="status">Listo para cargar una lista</div>
+</header>
+
+<main>
+  <div class="player-wrap" id="playerWrap">
+    <video id="video" controls autoplay playsinline></video>
+
+    <div class="player-controls">
+      <button class="icon-btn" id="menuButton" aria-label="Abrir listado" title="Abrir listado">☰</button>
+    </div>
+
+    <div class="channel-overlay" id="channelOverlay">
+      <div id="channelList">
+        <div class="empty">Carga una lista para comenzar</div>
+      </div>
+    </div>
+
+    <div class="menu-help" id="menuHelp">OK: abrir listado</div>
+  </div>
+
+  <section class="panel">
+    <h2>Cargar lista</h2>
+    <div class="row">
+      <button class="action" id="fileButton">Seleccionar archivo M3U</button>
+      <input id="fileInput" type="file" accept=".m3u,.m3u8,text/plain" class="hidden">
+    </div>
+    <input id="urlInput" type="url" placeholder="Pegar dirección URL de lista M3U">
+    <button class="action" id="urlButton">Cargar desde URL</button>
+    <textarea id="textInput" placeholder="O pegar aquí el contenido de una lista M3U"></textarea>
+    <button class="action" id="textButton">Cargar texto M3U</button>
+    <div class="message" id="loadMessage"></div>
+    <p class="small">Si una dirección URL bloquea el acceso desde el navegador por CORS, descarga el archivo y cárgalo desde el dispositivo.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Vinculación remota</h2>
+    <p class="small">Usa un código para transferir una lista entre el teléfono y el televisor mediante el portal remoto.</p>
+
+    <div class="row">
+      <button class="action" id="createCode">Generar código en este equipo</button>
+    </div>
+    <input id="pairCode" maxlength="12" placeholder="Código de vinculación">
+    <button class="action" id="sendRemote">Enviar lista con código</button>
+    <button class="action secondary" id="receiveRemote">Recibir lista con código</button>
+    <div class="message" id="pairMessage"></div>
+    <p class="small">El televisor puede generar un código y el teléfono enviar la lista con ese mismo código. También puedes introducir un código existente para recibir una lista.</p>
+  </section>
+</main>
+
+<footer>HÚSAR IPTV · Reproductor web sin publicidad</footer>
+
+<script>
+(function(){
+"use strict";
+
+var SUPABASE_URL="https://wfodkvfmgfkmltttlqjo.supabase.co";
+var SUPABASE_KEY="sb_publishable_9nc0AQ0oyH9ajZtfL0P6fg_cLTdd2gZ";
+
+var video=document.getElementById("video");
+var overlay=document.getElementById("channelOverlay");
+var channelList=document.getElementById("channelList");
+var menuButton=document.getElementById("menuButton");
+var menuHelp=document.getElementById("menuHelp");
+var status=document.getElementById("status");
+var loadMessage=document.getElementById("loadMessage");
+var pairMessage=document.getElementById("pairMessage");
+
+var channels=[];
+var currentIndex=-1;
+var menuOpen=false;
+var hls=null;
+var currentCode="";
+var remoteTimer=null;
+
+function setStatus(t){status.textContent=t}
+function message(t){loadMessage.textContent=t}
+function pairStatus(t){pairMessage.textContent=t}
+
+function toggleMenu(force){
+  menuOpen=typeof force==="boolean"?force:!menuOpen;
+  overlay.className=menuOpen?"channel-overlay open":"channel-overlay";
+  menuHelp.textContent=menuOpen?"OK: seleccionar · Atrás: cerrar":"OK: abrir listado";
+  if(menuOpen){
+    var selected=channelList.querySelector(".channel.active") ||
+      channelList.querySelector(".channel");
+    if(selected){selected.focus()}
+  }else{
+    menuButton.focus();
+  }
+}
+
+menuButton.addEventListener("click",function(){toggleMenu()});
+
+function parseM3U(text){
+  var lines=text.replace(/^\uFEFF/,"").split(/\r?\n/);
+  var result=[];
+  var info=null;
+
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i].trim();
+    if(!line)continue;
+
+    if(line.indexOf("#EXTINF")===0){
+      var comma=line.lastIndexOf(",");
+      var name=comma>=0?line.substring(comma+1).trim():"Canal "+(result.length+1);
+      var logoMatch=line.match(/tvg-logo=["']([^"']*)["']/i);
+      var groupMatch=line.match(/group-title=["']([^"']*)["']/i);
+      info={
+        name:name || "Canal "+(result.length+1),
+        logo:logoMatch?logoMatch[1]:"",
+        group:groupMatch?groupMatch[1]:""
+      };
+    }else if(line.charAt(0)!=="#"){
+      result.push({
+        name:info?info.name:"Canal "+(result.length+1),
+        logo:info?info.logo:"",
+        group:info?info.group:"",
+        url:line
+      });
+      info=null;
+    }
+  }
+  return result;
+}
+
+function acceptPlaylist(text){
+  var parsed=parseM3U(text);
+  if(!parsed.length){
+    message("No se encontraron canales válidos en la lista.");
+    return false;
+  }
+  channels=parsed;
+  currentIndex=-1;
+  renderChannels();
+  message("Lista cargada: "+channels.length+" canales.");
+  setStatus(channels.length+" canales disponibles");
+  toggleMenu(true);
+  return true;
+}
+
+function renderChannels(){
+  channelList.innerHTML="";
+  if(!channels.length){
+    channelList.innerHTML='<div class="empty">No hay canales disponibles</div>';
+    return;
+  }
+
+  for(var i=0;i<channels.length;i++){
+    (function(index){
+      var item=channels[index];
+      var button=document.createElement("button");
+      button.type="button";
+      button.className="channel"+(index===currentIndex?" active":"");
+      button.setAttribute("data-index",index);
+
+      var number=document.createElement("span");
+      number.className="channel-number";
+      number.textContent=String(index+1);
+
+      var name=document.createElement("span");
+      name.className="channel-name";
+      name.textContent=item.name;
+
+      button.appendChild(number);
+      button.appendChild(name);
+
+      button.addEventListener("click",function(){
+        playChannel(index);
+      });
+      channelList.appendChild(button);
+    })(i);
+  }
+}
+
+function playChannel(index){
+  if(index<0||index>=channels.length)return;
+  currentIndex=index;
+  var item=channels[index];
+
+  if(hls){
+    try{hls.destroy()}catch(e){}
+    hls=null;
+  }
+
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+
+  var url=item.url;
+  var isHls=/\.m3u8($|\?)/i.test(url);
+
+  if(isHls && window.Hls && window.Hls.isSupported()){
+    hls=new window.Hls({enableWorker:false});
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    hls.on(window.Hls.Events.MANIFEST_PARSED,function(){
+      video.play().catch(function(){});
+    });
+    hls.on(window.Hls.Events.ERROR,function(event,data){
+      if(data&&data.fatal){
+        setStatus("No se pudo reproducir este canal");
+      }
+    });
+  }else{
+    video.src=url;
+    video.load();
+    var playPromise=video.play();
+    if(playPromise&&playPromise.catch){
+      playPromise.catch(function(){});
+    }
+  }
+
+  renderChannels();
+  toggleMenu(false);
+  setStatus("Reproduciendo: "+item.name);
+}
+
+function loadHlsLibrary(callback){
+  if(window.Hls){callback();return}
+  var script=document.createElement("script");
+  script.src="https://cdn.jsdelivr.net/npm/hls.js@1";
+  script.onload=callback;
+  script.onerror=callback;
+  document.head.appendChild(script);
+}
+
+document.getElementById("fileButton").addEventListener("click",function(){
+  document.getElementById("fileInput").click();
+});
+
+document.getElementById("fileInput").addEventListener("change",function(e){
+  var file=e.target.files&&e.target.files[0];
+  if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(){acceptPlaylist(String(reader.result||""))};
+  reader.onerror=function(){message("No se pudo leer el archivo.")};
+  reader.readAsText(file);
+});
+
+document.getElementById("textButton").addEventListener("click",function(){
+  acceptPlaylist(document.getElementById("textInput").value);
+});
+
+document.getElementById("urlButton").addEventListener("click",function(){
+  var url=document.getElementById("urlInput").value.trim();
+  if(!url){message("Introduce una dirección URL.");return}
+  message("Intentando cargar la lista...");
+  fetch(url).then(function(response){
+    if(!response.ok)throw new Error("HTTP "+response.status);
+    return response.text();
+  }).then(function(text){
+    acceptPlaylist(text);
+  }).catch(function(){
+    message("No se pudo acceder a la lista. Puede existir un bloqueo CORS. Descarga el archivo y cárgalo desde tu dispositivo.");
+  });
+});
+
+/* Control remoto: OK abre el listado y OK sobre un canal lo selecciona. */
+document.addEventListener("keydown",function(e){
+  var key=e.key;
+  var code=e.keyCode;
+
+  if(key==="Escape"||key==="Backspace"||code===27||code===8){
+    if(menuOpen){
+      e.preventDefault();
+      toggleMenu(false);
+    }
+    return;
+  }
+
+  if(key==="Enter"||key===" "||code===13||code===23){
+    var target=e.target;
+    if(target===menuButton){
+      e.preventDefault();
+      toggleMenu();
+      return;
+    }
+    if(target&&target.classList&&target.classList.contains("channel")){
+      e.preventDefault();
+      var idx=parseInt(target.getAttribute("data-index"),10);
+      playChannel(idx);
+      return;
+    }
+    if(!menuOpen){
+      e.preventDefault();
+      toggleMenu(true);
+    }
+  }
+});
+
+/* Mantener visible el listado al navegar con flechas. */
+channelList.addEventListener("keydown",function(e){
+  var buttons=channelList.querySelectorAll(".channel");
+  if(!buttons.length)return;
+  var active=document.activeElement;
+  var index=Array.prototype.indexOf.call(buttons,active);
+  if(index<0)return;
+
+  if(e.key==="ArrowDown"){
+    e.preventDefault();
+    buttons[Math.min(index+1,buttons.length-1)].focus();
+  }else if(e.key==="ArrowUp"){
+    e.preventDefault();
+    buttons[Math.max(index-1,0)].focus();
+  }else if(e.key==="ArrowRight"){
+    e.preventDefault();
+    toggleMenu(false);
+  }
+});
+
+/* Supabase RPC */
+function supabaseRPC(functionName,body){
+  return fetch(SUPABASE_URL+"/rest/v1/rpc/"+functionName,{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "apikey":SUPABASE_KEY,
+      "Authorization":"Bearer "+SUPABASE_KEY
+    },
+    body:JSON.stringify(body||{})
+  }).then(function(response){
+    return response.text().then(function(text){
+      var data;
+      try{data=JSON.parse(text)}catch(e){data=text}
+      if(!response.ok){
+        var detail=typeof data==="string"?data:JSON.stringify(data);
+        throw new Error(detail||"Error de conexión");
+      }
+      return data;
+    });
+  });
+}
+
+function extractCode(data){
+  if(typeof data==="string")return data;
+  if(Array.isArray(data)&&data.length)data=data[0];
+  if(data&&typeof data==="object"){
+    return data.code||data.pairing_code||data.codigo||data.pin||"";
+  }
+  return "";
+}
+
+function extractPlaylist(data){
+  if(Array.isArray(data)&&data.length)data=data[0];
+  if(typeof data==="string")return data;
+  if(data&&typeof data==="object"){
+    return data.playlist_text||data.playlist||data.content||data.m3u||"";
+  }
+  return "";
+}
+
+document.getElementById("createCode").addEventListener("click",function(){
+  pairStatus("Generando código...");
+  supabaseRPC("husar_create_pairing",{}).then(function(data){
+    var code=extractCode(data);
+    if(!code)throw new Error("El servidor no devolvió un código reconocible.");
+    currentCode=String(code).toUpperCase();
+    document.getElementById("pairCode").value=currentCode;
+    pairStatus("Código generado: "+currentCode);
+  }).catch(function(error){
+    pairStatus("No se pudo generar el código: "+error.message);
+  });
+});
+
+document.getElementById("sendRemote").addEventListener("click",function(){
+  var code=document.getElementById("pairCode").value.trim().toUpperCase();
+  if(!code){pairStatus("Introduce el código del televisor.");return}
+  if(!channels.length){pairStatus("Primero carga una lista M3U.");return}
+
+  var text=document.getElementById("textInput").value.trim();
+  if(!text){
+    pairStatus("Para enviar la lista, carga un archivo o pega su contenido en el cuadro de texto.");
+    return;
+  }
+
+  pairStatus("Enviando lista...");
+  supabaseRPC("husar_publish_playlist",{
+    p_code:code,
+    p_playlist_text:text
+  }).then(function(){
+    pairStatus("Lista enviada. Ahora el televisor puede recibirla.");
+  }).catch(function(error){
+    pairStatus("No se pudo enviar: "+error.message);
+  });
+});
+
+function receiveRemote(){
+  var code=document.getElementById("pairCode").value.trim().toUpperCase();
+  if(!code){pairStatus("Introduce el código de vinculación.");return}
+  currentCode=code;
+  pairStatus("Buscando lista remota...");
+
+  supabaseRPC("husar_get_playlist",{p_code:code}).then(function(data){
+    var text=extractPlaylist(data);
+    if(text&&text.indexOf("#EXTM3U")!==-1){
+      if(acceptPlaylist(text)){
+        pairStatus("Lista recibida correctamente.");
+        if(remoteTimer){clearInterval(remoteTimer);remoteTimer=null}
+      }
+    }else{
+      pairStatus("Todavía no hay una lista disponible. Se volverá a consultar.");
+    }
+  }).catch(function(error){
+    pairStatus("Esperando lista o revisa la vinculación: "+error.message);
+  });
+}
+
+document.getElementById("receiveRemote").addEventListener("click",function(){
+  receiveRemote();
+  if(remoteTimer)clearInterval(remoteTimer);
+  remoteTimer=setInterval(function(){
+    if(currentCode&&!channels.length)receiveRemote();
+  },10000);
+});
+
+loadHlsLibrary(function(){});
+setStatus("Listo para cargar una lista");
+})();
+</script>
+</body>
+</html>
+
