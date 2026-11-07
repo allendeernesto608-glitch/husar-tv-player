@@ -1,1 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080d18">
+<title>HÚSAR TV PLAYER</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080d18;color:#edf2fa;font-family:Arial,sans-serif}
+header{height:60px;background:#101a2b;border-bottom:1px solid #263750;display:flex;align-items:center;justify-content:space-between;padding:0 18px}
+.logo{font-size:21px;font-weight:bold;letter-spacing:1px;color:#48c8ff}
+.logo span{color:white}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button,.filebtn{background:#176baf;color:white;border:0;border-radius:6px;padding:10px 13px;font-weight:bold;cursor:pointer}
+button:hover,.filebtn:hover{background:#238bdc}
+button.secondary{background:#26364c}
+button:disabled{opacity:.4}
+main{display:grid;grid-template-columns:310px 1fr;height:calc(100vh - 60px)}
+aside{background:#101a2b;border-right:1px solid #263750;display:flex;flex-direction:column;min-height:0}
+.sidehead{padding:13px;border-bottom:1px solid #263750}
+input,select{width:100%;background:#080f1d;color:white;border:1px solid #344761;border-radius:6px;padding:11px;margin-bottom:8px}
+#count{font-size:12px;color:#9eb2cb}
+#channels{overflow:auto;flex:1}
+.channel{padding:12px;border-bottom:1px solid #24334a;cursor:pointer;display:flex;align-items:center;gap:10px}
+.channel:hover{background:#1b2d46}
+.channel.active{background:#174d75;border-left:4px solid #48c8ff}
+.channel img{width:35px;height:35px;object-fit:contain;background:#172338;border-radius:5px}
+.channel .name{font-size:14px;font-weight:bold;overflow-wrap:anywhere}
+.channel .group{font-size:11px;color:#9eb2cb;margin-top:4px}
+.playerarea{padding:18px;display:flex;flex-direction:column;min-width:0}
+#screen{background:#000;width:100%;aspect-ratio:16/9;max-height:calc(100vh - 190px);border-radius:9px;object-fit:contain}
+#now{font-size:18px;font-weight:bold;margin:14px 0 10px}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+#message{font-size:13px;color:#9eb2cb;margin-top:12px;min-height:20px}
+.empty{padding:25px;text-align:center;color:#8da1bb;font-size:14px}
+#file{display:none}
+@media(max-width:700px){
+ header{height:auto;min-height:60px;padding:10px;align-items:flex-start;gap:10px;flex-direction:column}
+ .actions{width:100%}
+ .actions button,.filebtn{font-size:12px;padding:9px}
+ main{height:auto;min-height:calc(100vh - 100px);grid-template-columns:1fr;grid-template-rows:minmax(220px,auto) 1fr}
+ .playerarea{grid-row:1;padding:10px}
+ #screen{max-height:none}
+ aside{grid-row:2;min-height:330px;border-right:0}
+ #channels{max-height:45vh}
+}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">HÚSAR <span>TV PLAYER</span></div>
+ <div class="actions">
+  <label class="filebtn" for="file">CARGAR M3U</label>
+  <input id="file" type="file" accept=".m3u,.m3u8,text/plain">
+  <button id="urlBtn">CARGAR URL</button>
+  <button id="clearBtn" class="secondary">LIMPIAR</button>
+ </div>
+</header>
 
+<main>
+ <aside>
+  <div class="sidehead">
+   <input id="search" type="search" placeholder="Buscar canal...">
+   <select id="groups"><option value="">Todas las categorías</option></select>
+   <div id="count">Esperando lista de canales</div>
+  </div>
+  <div id="channels"><div class="empty">Carga tu lista M3U para comenzar</div></div>
+ </aside>
+
+ <section class="playerarea">
+  <video id="screen" controls playsinline></video>
+  <div id="now">Selecciona un canal</div>
+  <div class="controls">
+   <button id="prev">◀ ANTERIOR</button>
+   <button id="next">SIGUIENTE ▶</button>
+   <button id="stop" class="secondary">DETENER</button>
+  </div>
+  <div id="message">Reproductor preparado. Carga una lista M3U autorizada.</div>
+ </section>
+</main>
+
+<script>
+"use strict";
+
+const $=id=>document.getElementById(id);
+const video=$("screen");
+let channels=[];
+let selected=-1;
+let hls=null;
+
+function message(t){$("message").textContent=t}
+
+function parseM3U(text){
+ const lines=text.replace(/^\uFEFF/,"").split(/\r?\n/);
+ const result=[];
+ let info=null;
+
+ for(const raw of lines){
+  const line=raw.trim();
+  if(!line)continue;
+
+  if(line.startsWith("#EXTINF")){
+   const comma=line.indexOf(",");
+   const attrs=comma>=0?line.slice(0,comma):line;
+   const name=comma>=0?line.slice(comma+1).trim():"Canal";
+   const get=(key)=>{
+    const match=attrs.match(new RegExp(key+'\\s*=\\s*["\\']([^"\\']*)["\\']',"i"));
+    return match?match[1]:"";
+   };
+   info={
+    name:name||"Canal",
+    group:get("group-title")||"Sin categoría",
+    logo:get("tvg-logo")
+   };
+  }else if(!line.startsWith("#")&&info){
+   try{
+    const url=new URL(line);
+    if(url.protocol==="http:"||url.protocol==="https:"){
+     result.push({...info,url:line});
+    }
+   }catch(e){}
+   info=null;
+  }
+ }
+ return result;
+}
+
+function stopPlayer(){
+ if(hls){hls.destroy();hls=null}
+ video.pause();
+ video.removeAttribute("src");
+ video.load();
+}
+
+function playChannel(index){
+ if(index<0||index>=channels.length)return;
+ selected=index;
+ const ch=channels[index];
+ stopPlayer();
+ $("now").textContent=ch.name;
+ render();
+ message("Conectando con "+ch.name+"...");
+
+ const url=ch.url;
+ const isHls=/\.m3u8($|[?#])/i.test(url);
+
+ if(isHls&&window.Hls&&Hls.isSupported()){
+  hls=new Hls({enableWorker:true,lowLatencyMode:false});
+  hls.loadSource(url);
+  hls.attachMedia(video);
+  hls.on(Hls.Events.MANIFEST_PARSED,()=>{
+   video.play().catch(()=>message("Canal listo. Pulsa reproducir."));
+  });
+  hls.on(Hls.Events.ERROR,(event,data)=>{
+   if(data.fatal){
+    message("No se pudo reproducir esta señal. Comprueba el enlace o su disponibilidad.");
+    hls.destroy();hls=null;
+   }
+  });
+ }else{
+  video.src=url;
+  video.play().catch(()=>message("Canal seleccionado. Pulsa reproducir para iniciar."));
+ }
+}
+
+function render(){
+ const term=$("search").value.toLowerCase();
+ const group=$("groups").value;
+ const list=$("channels");
+ list.replaceChildren();
+
+ const filtered=channels.map((ch,i)=>({...ch,index:i})).filter(ch=>
+  ch.name.toLowerCase().includes(term)&&(!group||ch.group===group)
+ );
+
+ $("count").textContent=filtered.length+" canales visibles · "+channels.length+" en total";
+
+ if(!filtered.length){
+  list.innerHTML='<div class="empty">No hay canales para mostrar</div>';
+  return;
+ }
+
+ filtered.forEach(ch=>{
+  const item=document.createElement("div");
+  item.className="channel"+(ch.index===selected?" active":"");
+
+  if(ch.logo){
+   const img=document.createElement("img");
+   img.src=ch.logo;
+   img.alt="";
+   img.onerror=()=>img.remove();
+   item.appendChild(img);
+  }
+
+  const details=document.createElement("div");
+  const name=document.createElement("div");
+  name.className="name";
+  name.textContent=ch.name;
+  const category=document.createElement("div");
+  category.className="group";
+  category.textContent=ch.group;
+  details.append(name,category);
+  item.appendChild(details);
+  item.addEventListener("click",()=>playChannel(ch.index));
+  list.appendChild(item);
+ });
+}
+
+function loadPlaylist(text){
+ const parsed=parseM3U(text);
+ if(!parsed.length){
+  message("La lista no contiene canales válidos. Comprueba el archivo M3U.");
+  return;
+ }
+ channels=parsed;
+ selected=-1;
+ stopPlayer();
+ $("now").textContent="Selecciona un canal";
+ const groups=[...new Set(channels.map(c=>c.group))].sort();
+ $("groups").replaceChildren(new Option("Todas las categorías",""));
+ groups.forEach(g=>$("groups").add(new Option(g,g)));
+ render();
+ try{localStorage.setItem("husar_m3u",text)}catch(e){}
+ message("Lista cargada correctamente: "+channels.length+" canales.");
+}
+
+$("file").addEventListener("change",async e=>{
+ const file=e.target.files[0];
+ if(!file)return;
+ try{loadPlaylist(await file.text())}
+ catch(err){message("No se pudo leer el archivo.")}
+ e.target.value="";
+});
+
+$("urlBtn").addEventListener("click",async()=>{
+ const url=prompt("Introduce la dirección URL de tu lista M3U:");
+ if(!url)return;
+ try{
+  const parsed=new URL(url);
+  if(!["http:","https:"].includes(parsed.protocol))throw new Error();
+  message("Descargando lista...");
+  const response=await fetch(parsed.href);
+  if(!response.ok)throw new Error("HTTP "+response.status);
+  loadPlaylist(await response.text());
+ }catch(err){
+  message("No se pudo acceder a la URL. El servidor puede bloquear CORS. Descarga la lista y cárgala desde tu dispositivo.");
+ }
+});
+
+$("search").addEventListener("input",render);
+$("groups").addEventListener("change",render);
+
+$("prev").addEventListener("click",()=>{
+ if(channels.length)playChannel((selected<=0?channels.length:selected)-1);
+});
+$("next").addEventListener("click",()=>{
+ if(channels.length)playChannel((selected+1)%channels.length);
+});
+$("stop").addEventListener("click",()=>{
+ stopPlayer();
+ message("Reproducción detenida.");
+});
+$("clearBtn").addEventListener("click",()=>{
+ if(!confirm("¿Quieres quitar la lista cargada?"))return;
+ channels=[];selected=-1;
+ stopPlayer();
+ $("now").textContent="Selecciona un canal";
+ $("groups").replaceChildren(new Option("Todas las categorías",""));
+ $("channels").innerHTML='<div class="empty">Carga tu lista M3U para comenzar</div>';
+ $("count").textContent="Esperando lista de canales";
+ try{localStorage.removeItem("husar_m3u")}catch(e){}
+ message("Lista eliminada.");
+});
+
+try{
+ const saved=localStorage.getItem("husar_m3u");
+ if(saved)loadPlaylist(saved);
+}catch(e){}
+</script>
+</body>
+</html>
