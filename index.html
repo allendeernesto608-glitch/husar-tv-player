@@ -1,1 +1,807 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080d18">
+<title>HÚSAR IPTV</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<style>
+:root {
+  color-scheme: dark;
+  --bg:#080d18;
+  --panel:#111c2e;
+  --blue:#168cff;
+  --blue2:#1267b9;
+  --text:#fff;
+  --muted:#a9bad0;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Arial,sans-serif;
+}
+header {
+  background:#101c32;
+  padding:17px 12px;
+  text-align:center;
+  border-bottom:2px solid var(--blue);
+}
+h1 {
+  margin:0;
+  color:#49aaff;
+  letter-spacing:3px;
+}
+header p { margin:7px 0 0;color:#b9c8dc; }
+nav {
+  display:flex;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:12px;
+}
+button {
+  border:0;
+  border-radius:7px;
+  padding:12px 16px;
+  background:#147ce5;
+  color:white;
+  font-weight:bold;
+  cursor:pointer;
+}
+button:focus-visible {
+  outline:3px solid #9bd3ff;
+  outline-offset:3px;
+}
+input,textarea {
+  width:100%;
+  margin:7px 0;
+  padding:12px;
+  border:1px solid #34445c;
+  border-radius:7px;
+  background:#101a2b;
+  color:white;
+}
+textarea { min-height:110px; }
+main { max-width:1100px;margin:auto;padding:12px; }
+.panel {
+  margin:12px 0;
+  padding:16px;
+  border-radius:10px;
+  background:var(--panel);
+}
+h2 { margin-top:0;color:#58b1ff; }
+.small { color:var(--muted);font-size:13px; }
+.status { color:#69d99b;white-space:pre-wrap; }
+.hidden { display:none!important; }
+hr { border:0;border-top:1px solid #34445c;margin:20px 0; }
+
+/* REPRODUCTOR */
+.player-wrap {
+  position:relative;
+  width:100%;
+  aspect-ratio:16/9;
+  background:#000;
+  border-radius:9px;
+  overflow:visible;
+  isolation:isolate;
+}
+#player {
+  display:block;
+  width:100%;
+  height:100%;
+  background:#000;
+  border-radius:9px;
+  object-fit:contain;
+}
+
+/* BOTÓN: visible en celular; en TV se abre con OK */
+#channelToggle {
+  position:absolute;
+  z-index:20;
+  top:12px;
+  right:12px;
+  display:none;
+  background:#147ce5;
+  border:1px solid #8bcaff;
+  box-shadow:0 3px 12px #0009;
+}
+
+/* MENÚ INDEPENDIENTE DEL VIDEO */
+#channelMenu {
+  position:absolute;
+  z-index:50;
+  top:12px;
+  right:12px;
+  width:min(340px,85%);
+  max-height:calc(100% - 24px);
+  display:none;
+  flex-direction:column;
+  gap:6px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:10px;
+  background:rgba(7,15,29,.98);
+  border:1px solid var(--blue);
+  border-radius:10px;
+  box-shadow:0 8px 30px #000d;
+}
+#channelMenu.visible { display:flex; }
+.menu-heading {
+  padding:7px 5px;
+  color:#75bdff;
+  font-weight:bold;
+  text-align:center;
+}
+.menu-close {
+  width:100%;
+  flex-shrink:0;
+  background:#8b2635;
+}
+.menu-channel {
+  display:block;
+  width:100%;
+  flex-shrink:0;
+  padding:13px;
+  margin:0;
+  text-align:left;
+  background:#172b45;
+  border:1px solid #263e5d;
+}
+.menu-channel.active,
+.menu-channel:focus {
+  background:#1267b9;
+  border-color:#70bdff;
+}
+#channels {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(145px,1fr));
+  gap:8px;
+  margin-top:12px;
+}
+.channel {
+  min-width:0;
+  overflow:hidden;
+  text-align:left;
+  background:#1a2b43;
+}
+.channel.active { background:#1267b9; }
+#pairCode {
+  padding:15px;
+  color:#69d99b;
+  text-align:center;
+  font-size:32px;
+  font-weight:bold;
+  letter-spacing:7px;
+}
+@media(max-width:760px) {
+  main { padding:8px; }
+  .panel { padding:12px; }
+  #channelToggle { display:block; }
+  #channelMenu {
+    top:8px;
+    right:8px;
+    width:min(340px,calc(100% - 16px));
+    max-height:calc(100% - 16px);
+  }
+}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>HÚSAR IPTV</h1>
+  <p>Televisión en directo · Sin publicidad</p>
+</header>
+
+<nav>
+  <button type="button" onclick="showSection('live')">TELEVISIÓN</button>
+  <button type="button" onclick="showSection('load')">CARGAR LISTA</button>
+  <button type="button" onclick="showSection('portal')">PORTAL REMOTO</button>
+</nav>
+
+<main>
+<section id="live">
+  <div class="panel">
+    <h2>TELEVISIÓN EN DIRECTO</h2>
+
+    <div class="player-wrap" id="playerWrap" tabindex="0"
+         role="region" aria-label="Reproductor de televisión">
+
+      <video id="player" playsinline controls></video>
+
+      <button id="channelToggle" type="button"
+              aria-expanded="false" aria-controls="channelMenu">
+        ☰ CANALES
+      </button>
+
+      <div id="channelMenu" aria-label="Lista de canales">
+        <div class="menu-heading">CANALES DISPONIBLES</div>
+        <button class="menu-close" id="closeMenu" type="button">
+          ✕ CERRAR
+        </button>
+        <div id="menuItems">
+          <div class="small">Carga una lista M3U para ver tus canales.</div>
+        </div>
+      </div>
+    </div>
+
+    <p id="playStatus" class="small">Esperando lista de canales.</p>
+    <p class="small">
+      Celular: toca CANALES o el reproductor.
+      TV: pulsa OK para abrir la lista.
+      Flechas izquierda y derecha: cambiar canal.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>CANALES DISPONIBLES</h2>
+    <div id="channels"></div>
+  </div>
+</section>
+
+<section id="load" class="hidden">
+  <div class="panel">
+    <h2>CARGAR LISTA M3U</h2>
+    <p class="small">Selecciona un archivo desde tu dispositivo.</p>
+    <input type="file" id="fileInput" accept=".m3u,.m3u8,.txt">
+    <button type="button" onclick="loadFile()">CARGAR ARCHIVO</button>
+
+    <hr>
+    <h2>CARGAR MEDIANTE ENLACE</h2>
+    <input id="playlistUrl" placeholder="https://servidor/lista.m3u">
+    <button type="button" onclick="loadUrl()">CARGAR ENLACE</button>
+
+    <hr>
+    <h2>PEGAR CONTENIDO M3U</h2>
+    <textarea id="playlistText" placeholder="#EXTM3U"></textarea>
+    <button type="button" onclick="loadText()">CARGAR LISTA</button>
+  </div>
+</section>
+
+<section id="portal" class="hidden">
+  <div class="panel">
+    <h2>VINCULAR TELEVISOR</h2>
+    <p class="small">
+      Genera el código en el televisor. Después, introdúcelo en el portal
+      desde el celular para enviar la lista.
+    </p>
+    <button type="button" onclick="createPairing()">GENERAR CÓDIGO PARA TV</button>
+    <div id="pairCode"></div>
+    <p id="pairStatus" class="status"></p>
+  </div>
+
+  <div class="panel">
+    <h2>ENVIAR LISTA AL TELEVISOR</h2>
+    <label for="remoteCode">Código que muestra tu televisor</label>
+    <input id="remoteCode" placeholder="Introduce el código">
+
+    <label for="remoteFile">Archivo M3U desde tu celular</label>
+    <input type="file" id="remoteFile" accept=".m3u,.m3u8,.txt">
+
+    <label for="remoteText">O pega el contenido de la lista</label>
+    <textarea id="remoteText" placeholder="#EXTM3U"></textarea>
+
+    <button type="button" onclick="sendRemote()">ENVIAR LISTA AL TELEVISOR</button>
+    <p id="remoteStatus" class="status"></p>
+  </div>
+</section>
+</main>
+
+<script>
+"use strict";
+
+/* CONFIGURACIÓN SUPABASE */
+const SUPABASE_URL = "https://wfodkvfmgfkmltttlqjo.supabase.co";
+const SUPABASE_KEY = "sb_publishable_9nc0AQ0oyH9ajZtfL0P6fg_cLTdd2gZ";
+
+const db = window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
+
+/* ESTADO */
+let playlist = [];
+let hls = null;
+let currentChannel = -1;
+let currentCode = "";
+let poller = null;
+let lastRemoteText = "";
+
+/* ELEMENTOS */
+const player = document.getElementById("player");
+const playerWrap = document.getElementById("playerWrap");
+const channelMenu = document.getElementById("channelMenu");
+const channelToggle = document.getElementById("channelToggle");
+const menuItems = document.getElementById("menuItems");
+
+/* SECCIONES */
+function showSection(id) {
+  ["live","load","portal"].forEach(section => {
+    document.getElementById(section)
+      .classList.toggle("hidden", section !== id);
+  });
+  hideChannelMenu();
+}
+
+/* MENÚ */
+function openChannelMenu() {
+  if (!playlist.length) {
+    document.getElementById("playStatus").textContent =
+      "Primero carga una lista M3U para ver los canales.";
+    return;
+  }
+
+  channelMenu.classList.add("visible");
+  channelToggle.setAttribute("aria-expanded","true");
+
+  const active = menuItems.querySelector(".menu-channel.active");
+  const first = menuItems.querySelector(".menu-channel");
+  const target = active || first;
+
+  if (target) target.focus();
+}
+
+function hideChannelMenu() {
+  channelMenu.classList.remove("visible");
+  channelToggle.setAttribute("aria-expanded","false");
+}
+
+function toggleChannelMenu() {
+  if (channelMenu.classList.contains("visible")) {
+    hideChannelMenu();
+  } else {
+    openChannelMenu();
+  }
+}
+
+channelToggle.addEventListener("click", event => {
+  event.stopPropagation();
+  toggleChannelMenu();
+});
+
+document.getElementById("closeMenu").addEventListener("click", event => {
+  event.stopPropagation();
+  hideChannelMenu();
+  playerWrap.focus();
+});
+
+/* TOQUE EN EL REPRODUCTOR: ABRIR MENÚ */
+playerWrap.addEventListener("click", event => {
+  if (event.target.closest("#channelMenu")) return;
+  if (event.target.closest("#channelToggle")) return;
+
+  if (event.target === player || event.target === playerWrap) {
+    if (!channelMenu.classList.contains("visible")) {
+      openChannelMenu();
+    }
+  }
+});
+
+/* CERRAR AL TOCAR FUERA */
+document.addEventListener("click", event => {
+  if (!channelMenu.classList.contains("visible")) return;
+
+  if (playerWrap.contains(event.target)) return;
+  hideChannelMenu();
+});
+
+/* TECLADO Y CONTROL REMOTO */
+document.addEventListener("keydown", event => {
+  const liveVisible = !document.getElementById("live").classList.contains("hidden");
+  if (!liveVisible) return;
+
+  const tag = (document.activeElement.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+  const menuOpen = channelMenu.classList.contains("visible");
+  const items = Array.from(menuItems.querySelectorAll(".menu-channel"));
+  const focusedIndex = items.indexOf(document.activeElement);
+
+  /* CAMBIO DIRECTO DE CANAL */
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    if (!playlist.length) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    changeChannel(event.key === "ArrowRight" ? 1 : -1);
+    return;
+  }
+
+  /* CERRAR MENÚ */
+  if (
+    event.key === "Escape" ||
+    event.key === "Backspace" ||
+    event.key === "BrowserBack" ||
+    event.keyCode === 461 ||
+    event.keyCode === 10009
+  ) {
+    if (menuOpen) {
+      event.preventDefault();
+      hideChannelMenu();
+      playerWrap.focus();
+    }
+    return;
+  }
+
+  /* RECORRER CANALES */
+  if (menuOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    if (!items.length) return;
+
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    const next = focusedIndex < 0
+      ? (direction > 0 ? 0 : items.length - 1)
+      : (focusedIndex + direction + items.length) % items.length;
+
+    items[next].focus();
+    return;
+  }
+
+  /* OK / ENTER */
+  const isOK =
+    event.key === "Enter" ||
+    event.key === " " ||
+    event.key === "Select" ||
+    event.keyCode === 23 ||
+    event.keyCode === 66;
+
+  if (isOK) {
+    event.preventDefault();
+
+    if (menuOpen && focusedIndex >= 0) {
+      selectChannel(focusedIndex);
+    } else if (!menuOpen) {
+      openChannelMenu();
+    }
+  }
+}, true);
+
+/* CAMBIAR CANAL CON FLECHAS */
+function changeChannel(direction) {
+  if (!playlist.length) return;
+
+  let next;
+  if (currentChannel < 0) {
+    next = direction > 0 ? 0 : playlist.length - 1;
+  } else {
+    next = (currentChannel + direction + playlist.length) % playlist.length;
+  }
+
+  hideChannelMenu();
+  playChannel(next);
+}
+
+/* LECTURA M3U */
+function parseM3U(text) {
+  const lines = String(text).replace(/^\uFEFF/, "").split(/\r?\n/);
+  const result = [];
+  let name = "";
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    if (line.startsWith("#EXTINF")) {
+      const comma = line.indexOf(",");
+      name = comma >= 0 ? line.substring(comma + 1).trim() : "";
+    } else if (!line.startsWith("#") && /^https?:\/\//i.test(line)) {
+      result.push({
+        name: name || "Canal " + (result.length + 1),
+        url: line
+      });
+      name = "";
+    }
+  }
+  return result;
+}
+
+/* CONSTRUIR LISTAS */
+function displayChannels() {
+  const box = document.getElementById("channels");
+  box.replaceChildren();
+  menuItems.replaceChildren();
+
+  if (!playlist.length) return;
+
+  playlist.forEach((channel, index) => {
+    const menuButton = document.createElement("button");
+    menuButton.type = "button";
+    menuButton.className = "menu-channel";
+    menuButton.textContent = channel.name;
+    menuButton.addEventListener("click", () => selectChannel(index));
+    menuItems.appendChild(menuButton);
+
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "channel";
+    card.textContent = channel.name;
+    card.addEventListener("click", () => selectChannel(index));
+    box.appendChild(card);
+  });
+
+  currentChannel = -1;
+  hideChannelMenu();
+
+  document.getElementById("playStatus").textContent =
+    playlist.length + " canales cargados correctamente.";
+}
+
+/* SELECCIONAR CANAL */
+function selectChannel(index) {
+  hideChannelMenu();
+  playChannel(Number(index));
+  playerWrap.focus();
+}
+
+/* REPRODUCCIÓN */
+function playChannel(index) {
+  const channel = playlist[index];
+  if (!channel) return;
+
+  currentChannel = index;
+
+  if (hls) {
+    hls.destroy();
+    hls = null;
+  }
+
+  player.pause();
+  player.removeAttribute("src");
+  player.load();
+
+  document.querySelectorAll(".channel").forEach((button, i) => {
+    button.classList.toggle("active", i === index);
+  });
+
+  document.querySelectorAll(".menu-channel").forEach((button, i) => {
+    button.classList.toggle("active", i === index);
+  });
+
+  document.getElementById("playStatus").textContent =
+    "Conectando: " + channel.name;
+
+  const isHls = /\.m3u8($|[?#])/i.test(channel.url);
+
+  if (isHls && window.Hls && Hls.isSupported()) {
+    hls = new Hls({
+      enableWorker: true,
+      maxBufferLength: 20,
+      backBufferLength: 30
+    });
+
+    hls.loadSource(channel.url);
+    hls.attachMedia(player);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      player.play().catch(() => {
+        document.getElementById("playStatus").textContent =
+          "Canal preparado. Pulsa reproducir.";
+      });
+    });
+
+    hls.on(Hls.Events.ERROR, (event, data) => {
+      if (data.fatal) {
+        document.getElementById("playStatus").textContent =
+          "Error de reproducción. Comprueba el enlace o el formato.";
+        hls.destroy();
+        hls = null;
+      }
+    });
+  } else {
+    player.src = channel.url;
+    player.play().catch(() => {
+      document.getElementById("playStatus").textContent =
+        "Canal seleccionado. Pulsa reproducir o comprueba el formato.";
+    });
+  }
+}
+
+/* ACEPTAR UNA LISTA */
+function acceptPlaylist(text) {
+  const parsed = parseM3U(text);
+
+  if (!parsed.length) {
+    alert("No se encontraron canales válidos en la lista M3U.");
+    return false;
+  }
+
+  playlist = parsed;
+  displayChannels();
+  showSection("live");
+  return true;
+}
+
+/* CARGA LOCAL */
+async function loadFile() {
+  const file = document.getElementById("fileInput").files[0];
+
+  if (!file) {
+    alert("Selecciona un archivo M3U.");
+    return;
+  }
+
+  try {
+    acceptPlaylist(await file.text());
+  } catch (error) {
+    alert("No se pudo leer el archivo.");
+  }
+}
+
+/* CARGA DE TEXTO */
+function loadText() {
+  acceptPlaylist(document.getElementById("playlistText").value);
+}
+
+/* CARGA POR URL */
+async function loadUrl() {
+  const url = document.getElementById("playlistUrl").value.trim();
+
+  if (!/^https?:\/\//i.test(url)) {
+    alert("Introduce un enlace válido que comience con http:// o https://");
+    return;
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    acceptPlaylist(await response.text());
+  } catch (error) {
+    alert(
+      "No se pudo acceder a la lista. El servidor puede bloquear CORS. " +
+      "Descarga el archivo y cárgalo desde tu dispositivo."
+    );
+  }
+}
+
+/* FUNCIONES DEL PORTAL REMOTO */
+function extractValue(data, keys) {
+  if (typeof data === "string") return data;
+
+  if (Array.isArray(data) && data.length) {
+    return extractValue(data[0], keys);
+  }
+
+  if (data && typeof data === "object") {
+    for (const key of keys) {
+      if (data[key] != null) return data[key];
+    }
+  }
+
+  return "";
+}
+
+/* GENERAR CÓDIGO EN EL TELEVISOR */
+async function createPairing() {
+  const status = document.getElementById("pairStatus");
+
+  if (!db) {
+    status.textContent = "No se pudo inicializar Supabase.";
+    return;
+  }
+
+  status.textContent = "Generando código...";
+
+  try {
+    const { data, error } = await db.rpc("husar_create_pairing");
+    if (error) throw error;
+
+    currentCode = String(
+      extractValue(data, ["code", "husar_create_pairing", "pairing_code"])
+    ).trim();
+
+    if (!currentCode) {
+      throw new Error("Supabase no devolvió un código.");
+    }
+
+    document.getElementById("pairCode").textContent = currentCode;
+    status.textContent =
+      "Código activo. Introduce este código en el portal desde tu celular.";
+
+    if (poller) clearInterval(poller);
+    poller = setInterval(checkRemote, 5000);
+
+  } catch (error) {
+    status.textContent = "Error al generar código: " + error.message;
+  }
+}
+
+/* EL TELEVISOR CONSULTA SI RECIBIÓ UNA LISTA */
+async function checkRemote() {
+  if (!currentCode || !db) return;
+
+  try {
+    const { data, error } = await db.rpc("husar_get_playlist", {
+      p_code: currentCode
+    });
+
+    if (error) throw error;
+
+    const text = extractValue(data, [
+      "playlist_text",
+      "playlist",
+      "content"
+    ]);
+
+    if (
+      typeof text === "string" &&
+      text.trim().startsWith("#EXTM3U") &&
+      text !== lastRemoteText
+    ) {
+      if (acceptPlaylist(text)) {
+        lastRemoteText = text;
+        document.getElementById("pairStatus").textContent =
+          "¡Lista recibida! Televisor actualizado.";
+
+        if (poller) clearInterval(poller);
+        poller = null;
+      }
+    }
+  } catch (error) {
+    document.getElementById("pairStatus").textContent =
+      "Esperando lista remota...";
+  }
+}
+
+/* ENVIAR LISTA DESDE EL CELULAR */
+async function sendRemote() {
+  const code = document.getElementById("remoteCode").value.trim().toUpperCase();
+  const status = document.getElementById("remoteStatus");
+
+  let text = document.getElementById("remoteText").value.trim();
+  const file = document.getElementById("remoteFile").files[0];
+
+  if (!db) {
+    status.textContent = "No se pudo inicializar Supabase.";
+    return;
+  }
+
+  if (file) {
+    try {
+      text = await file.text();
+    } catch (error) {
+      status.textContent = "No se pudo leer el archivo.";
+      return;
+    }
+  }
+
+  if (!code) {
+    status.textContent = "Introduce el código del televisor.";
+    return;
+  }
+
+  if (!text.trim().startsWith("#EXTM3U")) {
+    status.textContent = "Selecciona un archivo M3U válido o pega su contenido.";
+    return;
+  }
+
+  status.textContent = "Enviando lista...";
+
+  try {
+    const { data, error } = await db.rpc("husar_publish_playlist", {
+      p_code: code,
+      p_playlist_text: text
+    });
+
+    if (error) throw error;
+    if (data === false) {
+      throw new Error("El código no es válido o ha caducado.");
+    }
+
+    status.textContent =
+      "Lista enviada. Espera unos segundos para que aparezca en el televisor.";
+
+  } catch (error) {
+    status.textContent = "No se pudo enviar: " + error.message;
+  }
+}
+</script>
+</body>
+</html>
+
