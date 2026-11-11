@@ -1,1 +1,533 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080d17">
+<title>HÚSAR IPTV</title>
+<style>
+:root {
+  color-scheme:dark;
+  --bg:#080d17;
+  --panel:#111c2d;
+  --gold:#edbd55;
+  --line:#34445c;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;width:100%;height:100%;
+  overflow:hidden;background:#000;color:#fff;
+  font-family:Arial,sans-serif
+}
+button,input{font:inherit}
+button{
+  color:white;background:#17263b;
+  border:1px solid var(--line);
+  border-radius:9px;padding:12px;
+  cursor:pointer
+}
+button:focus{
+  outline:3px solid var(--gold);
+  outline-offset:2px
+}
+#player{
+  position:fixed;inset:0;
+  background:#000;display:grid;
+  place-items:center
+}
+video{
+  width:100%;height:100%;
+  object-fit:contain;background:#000
+}
+#empty{
+  position:absolute;inset:0;
+  display:grid;place-content:center;
+  text-align:center;pointer-events:none;
+  background:radial-gradient(ellipse,#17263b,#000 70%)
+}
+#empty strong{
+  color:var(--gold);
+  font-size:clamp(28px,5vw,55px);
+  letter-spacing:5px
+}
+#empty small{margin-top:12px;color:#9aabc1}
+.hidden{display:none!important}
+#quick{
+  position:absolute;left:50%;bottom:9%;
+  transform:translateX(-50%);
+  display:none;gap:14px;
+  width:min(92%,650px);
+  justify-content:center;flex-wrap:wrap;
+  z-index:10
+}
+#quick.visible{display:flex}
+#quick button{
+  min-width:220px;padding:18px;
+  font-weight:bold;font-size:16px;
+  border:2px solid var(--gold);
+  background:#17263bee
+}
+#library{
+  position:fixed;inset:0 auto 0 0;
+  width:min(390px,90vw);
+  z-index:20;background:#0c1422;
+  border-right:2px solid var(--gold);
+  display:flex;flex-direction:column;
+  transform:translateX(-105%);
+  transition:transform .18s ease
+}
+#library.open{transform:translateX(0)}
+#libhead{
+  padding:15px;background:#111c2d;
+  border-bottom:1px solid var(--line)
+}
+#libhead h2{
+  margin:0 0 12px;color:var(--gold);
+  letter-spacing:2px;font-size:19px
+}
+#search{
+  width:100%;padding:12px;
+  background:#080d17;color:white;
+  border:1px solid var(--line);
+  border-radius:8px
+}
+#list{overflow:auto;padding:8px;flex:1}
+.channel{
+  width:100%;display:block;
+  text-align:left;margin-bottom:5px;
+  padding:13px;background:#142238;
+  border:1px solid transparent
+}
+.channel.selected,.channel:focus{
+  border-color:var(--gold);
+  background:#263650
+}
+#libfoot{
+  padding:12px;border-top:1px solid var(--line);
+  display:flex;gap:8px
+}
+#libfoot button{flex:1}
+#status{
+  position:fixed;left:50%;bottom:12px;
+  transform:translateX(-50%);
+  color:#b9c7d8;background:#111c2dcc;
+  padding:8px 14px;border-radius:20px;
+  font-size:12px;z-index:5;
+  max-width:90%;text-align:center
+}
+#fileInput{display:none}
+#back{
+  position:absolute;right:12px;top:12px;
+  z-index:30;display:none
+}
+#back.visible{display:block}
+@media(max-width:600px){
+ #quick{bottom:6%}
+ #quick button{width:100%}
+}
+</style>
+</head>
+<body>
+
+<div id="player">
+  <video id="video" playsinline controls></video>
+
+  <div id="empty">
+    <strong>HÚSAR IPTV</strong>
+    <small>Tu pantalla · Tu programación</small>
+  </div>
+
+  <div id="quick">
+    <button id="loadFile">＋ CARGAR ARCHIVO</button>
+    <button id="loadUrl">＋ AÑADIR URL</button>
+  </div>
+</div>
+
+<aside id="library">
+  <div id="libhead">
+    <h2>HÚSAR IPTV</h2>
+    <input id="search" placeholder="Buscar canal..." autocomplete="off">
+    <p id="total">0 canales</p>
+  </div>
+  <div id="list"></div>
+  <div id="libfoot">
+    <button id="closeLibrary">VOLVER</button>
+    <button id="addMore">＋ LISTA</button>
+  </div>
+</aside>
+
+<button id="back">VOLVER AL REPRODUCTOR</button>
+<input id="fileInput" type="file" accept=".m3u,.m3u8,.txt" multiple>
+<div id="status">HÚSAR IPTV preparado</div>
+
+<script>
+(function(){
+"use strict";
+
+const $ = id => document.getElementById(id);
+const video = $("video");
+
+let channels = [];
+let selected = -1;
+let hls = null;
+let lastOK = 0;
+let quickVisible = false;
+let libraryOpen = false;
+let lists = [];
+let urlLists = [];
+
+function message(text){
+  $("status").textContent = text;
+}
+
+function saveData(){
+  try{
+    localStorage.setItem("husar_channels",
+      JSON.stringify(channels));
+    localStorage.setItem("husar_lists",
+      JSON.stringify(lists));
+    localStorage.setItem("husar_urls",
+      JSON.stringify(urlLists));
+  }catch(e){
+    message("No se pudo guardar: almacenamiento lleno.");
+  }
+}
+
+function restoreData(){
+  try{
+    channels = JSON.parse(
+      localStorage.getItem("husar_channels") || "[]");
+    lists = JSON.parse(
+      localStorage.getItem("husar_lists") || "[]");
+    urlLists = JSON.parse(
+      localStorage.getItem("husar_urls") || "[]");
+    if(!Array.isArray(channels)) channels=[];
+    if(!Array.isArray(lists)) lists=[];
+    if(!Array.isArray(urlLists)) urlLists=[];
+  }catch(e){
+    channels=[];lists=[];urlLists=[];
+  }
+}
+
+function parseM3U(text,source){
+  const lines=String(text)
+    .replace(/^\uFEFF/,"").split(/\r?\n/);
+
+  const result=[];
+  let meta=null;
+
+  for(const raw of lines){
+    const line=raw.trim();
+    if(!line)continue;
+
+    if(line.startsWith("#EXTINF:")){
+      const comma=line.indexOf(",");
+      const name=comma>=0
+        ?line.slice(comma+1).trim()
+        :"Canal "+(result.length+1);
+
+      const attrs={};
+      line.replace(
+        /([\w-]+)="([^"]*)"/g,
+        (_,k,v)=>{attrs[k.toLowerCase()]=v}
+      );
+
+      meta={
+        name:name||"Canal "+(result.length+1),
+        logo:attrs["tvg-logo"]||"",
+        group:attrs["group-title"]||"Otros"
+      };
+    }
+    else if(/^https?:\/\//i.test(line)){
+      result.push({
+        name:meta?.name||"Canal "+(result.length+1),
+        url:line,
+        logo:meta?.logo||"",
+        group:meta?.group||"Otros",
+        source:source||"Lista"
+      });
+      meta=null;
+    }
+  }
+  return result;
+}
+
+function render(){
+  const q=$("search").value.trim().toLowerCase();
+  const filtered=channels
+    .map((c,i)=>({c,i}))
+    .filter(x=>x.c.name.toLowerCase().includes(q));
+
+  $("list").innerHTML="";
+  $("total").textContent=channels.length+" canales";
+
+  if(!filtered.length){
+    $("list").textContent="No hay canales. Carga una lista M3U.";
+    return;
+  }
+
+  const fragment=document.createDocumentFragment();
+
+  filtered.forEach(({c,i})=>{
+    const b=document.createElement("button");
+    b.className="channel"+(i===selected?" selected":"");
+    b.textContent=c.name;
+    b.dataset.index=i;
+    b.onclick=()=>play(i);
+    fragment.appendChild(b);
+  });
+
+  $("list").appendChild(fragment);
+}
+
+function showQuick(){
+  quickVisible=!quickVisible;
+  $("quick").classList.toggle("visible",quickVisible);
+}
+
+function openLibrary(){
+  libraryOpen=true;
+  quickVisible=false;
+  $("quick").classList.remove("visible");
+  $("library").classList.add("open");
+  $("back").classList.add("visible");
+  render();
+
+  const first=$("list").querySelector("button");
+  if(first)first.focus();
+}
+
+function closeLibrary(){
+  libraryOpen=false;
+  $("library").classList.remove("open");
+  $("back").classList.remove("visible");
+  $("player").focus();
+}
+
+function stop(){
+  try{
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }catch(e){}
+
+  if(hls){
+    try{hls.destroy()}catch(e){}
+    hls=null;
+  }
+  $("empty").classList.remove("hidden");
+}
+
+function loadHls(){
+  if(window.Hls)return Promise.resolve(true);
+
+  return new Promise(resolve=>{
+    const script=document.createElement("script");
+    script.src="https://cdn.jsdelivr.net/npm/hls.js@1.5.18/dist/hls.min.js";
+    script.onload=()=>resolve(!!window.Hls);
+    script.onerror=()=>resolve(false);
+    document.head.appendChild(script);
+  });
+}
+
+async function play(index){
+  if(index<0||index>=channels.length)return;
+
+  selected=index;
+  const channel=channels[index];
+
+  stop();
+  $("empty").classList.add("hidden");
+  $("quick").classList.remove("visible");
+  quickVisible=false;
+
+  closeLibrary();
+  render();
+
+  message("Conectando: "+channel.name);
+
+  const isHls=/\.m3u8($|\?)/i.test(channel.url);
+
+  if(isHls && !video.canPlayType("application/vnd.apple.mpegurl")){
+    const ok=await loadHls();
+    if(selected!==index)return;
+
+    if(!ok || !window.Hls || !Hls.isSupported()){
+      message("Este navegador no admite este flujo HLS.");
+      return;
+    }
+
+    hls=new Hls({
+      enableWorker:true,
+      lowLatencyMode:true,
+      backBufferLength:30
+    });
+
+    hls.on(Hls.Events.ERROR,(_,data)=>{
+      if(data.fatal)
+        message("No se pudo reproducir esta señal.");
+    });
+
+    hls.loadSource(channel.url);
+    hls.attachMedia(video);
+  }else{
+    video.src=channel.url;
+  }
+
+  try{
+    await video.play();
+    message("Reproduciendo: "+channel.name);
+  }catch(e){
+    message("Canal seleccionado. Pulsa OK para reproducir.");
+  }
+}
+
+async function addFiles(files){
+  const chosen=[...files].filter(f=>
+    /\.(m3u|m3u8|txt)$/i.test(f.name)
+  );
+
+  if(lists.length+chosen.length>10){
+    message("Máximo 10 archivos locales.");
+    return;
+  }
+
+  for(const file of chosen){
+    try{
+      const text=await file.text();
+      const items=parseM3U(text,file.name);
+
+      if(items.length){
+        lists.push(file.name);
+        channels.push(...items);
+      }
+    }catch(e){
+      message("No se pudo leer "+file.name);
+    }
+  }
+
+  saveData();
+  render();
+  closeLibrary();
+  message("Archivos procesados. Canales: "+channels.length);
+}
+
+async function addUrl(){
+  if(urlLists.length>=10){
+    message("Máximo 10 listas por URL.");
+    return;
+  }
+
+  const url=prompt("Introduce la dirección directa de tu lista M3U:");
+  if(!url)return;
+
+  if(!/^https?:\/\//i.test(url.trim())){
+    message("La dirección debe comenzar por http:// o https://");
+    return;
+  }
+
+  message("Descargando lista...");
+
+  try{
+    const response=await fetch(url.trim());
+    if(!response.ok)throw new Error("HTTP "+response.status);
+
+    const text=await response.text();
+    const items=parseM3U(text,url.trim());
+
+    if(!items.length)throw new Error("Sin canales");
+
+    urlLists.push(url.trim());
+    channels.push(...items);
+
+    saveData();
+    render();
+    closeLibrary();
+
+    message("Lista añadida: "+items.length+" canales.");
+  }catch(e){
+    message("No se pudo leer la URL. Puede ser un bloqueo CORS.");
+  }
+}
+
+$("loadFile").onclick=()=>$("fileInput").click();
+$("addMore").onclick=()=>$("fileInput").click();
+$("loadUrl").onclick=addUrl;
+
+$("fileInput").onchange=e=>{
+  addFiles(e.target.files);
+  e.target.value="";
+};
+
+$("closeLibrary").onclick=closeLibrary;
+$("back").onclick=closeLibrary;
+$("search").oninput=render;
+
+function handleDoubleOK(){
+  const now=Date.now();
+
+  if(now-lastOK<650){
+    showQuick();
+  }
+  lastOK=now;
+}
+
+$("player").tabIndex=0;
+$("player").addEventListener("keydown",e=>{
+  if(e.key==="Enter" || e.key===" "){
+    e.preventDefault();
+    handleDoubleOK();
+  }
+
+  if(e.key==="ArrowDown" || e.key==="ArrowUp"){
+    e.preventDefault();
+    if(!libraryOpen)openLibrary();
+  }
+
+  if(e.key==="Escape"){
+    $("quick").classList.remove("visible");
+    quickVisible=false;
+    closeLibrary();
+  }
+});
+
+$("player").addEventListener("dblclick",showQuick);
+
+$("list").addEventListener("keydown",e=>{
+  const buttons=[...$("list").querySelectorAll("button")];
+  const pos=buttons.indexOf(document.activeElement);
+
+  if(e.key==="ArrowDown"){
+    e.preventDefault();
+    buttons[Math.min(buttons.length-1,pos+1)]?.focus();
+  }
+  if(e.key==="ArrowUp"){
+    e.preventDefault();
+    if(pos<=0)closeLibrary();
+    else buttons[pos-1]?.focus();
+  }
+  if(e.key==="Escape"){
+    closeLibrary();
+  }
+});
+
+video.onerror=()=>{
+  message("No se pudo reproducir. Revisa la señal o su compatibilidad.");
+};
+
+restoreData();
+render();
+$("player").focus();
+
+if(channels.length){
+  message("HÚSAR IPTV listo · "+channels.length+" canales guardados.");
+}else{
+  message("HÚSAR IPTV listo · Doble OK para cargar una lista.");
+}
+
+})();
+</script>
+</body>
+</html>
+
